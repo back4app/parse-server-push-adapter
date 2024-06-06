@@ -26,11 +26,18 @@ export default function FCM(args, pushType) {
   }
 
   let app;
-  if (getApps().length === 0) {
-    app = initializeApp({ credential: cert(args.firebaseServiceAccount) });
-  } else {
-    app = getApp();
+
+  const name = args.firebaseServiceAccount
+
+  try{
+    app = getApp(name)
+  } catch(e) {
+    if (e.code == 'app/no-app') {
+      app = initializeApp({ credential: cert(args.firebaseServiceAccount) }, name);
+    }
+    else throw e
   }
+  
   this.sender = getMessaging(app);
   this.pushType = pushType; // Push type is only used to remain backwards compatible with APNS and GCM
 }
