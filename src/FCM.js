@@ -34,9 +34,8 @@ export default function FCM(args, pushType) {
       'FCM Configuration is invalid',
     );
   }
-
+  
   let app;
-
   const name = args.firebaseServiceAccount
   try {
     app = requestCacheControl.get(name);
