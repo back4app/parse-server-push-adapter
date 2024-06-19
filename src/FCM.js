@@ -2,9 +2,10 @@
 
 import Parse from 'parse';
 import log from 'npmlog';
-import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
+import { initializeApp, cert, getApps, getApp, deleteApp } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 import { randomString } from './PushAdapterUtils';
+const NodeCache = require('node-cache');
 
 const LOG_PREFIX = 'parse-server-push-adapter FCM';
 const FCMRegistrationTokensMax = 500;
@@ -17,6 +18,15 @@ const apnsIntegerDataKeys = [
   'expiration_time',
 ];
 
+const requestCacheControl = new NodeCache({
+  stdTTL: 600,
+  checkperiod: 60
+});
+requestCacheControl.on('expired', (appName, app) => {
+  console.log('Cleaning cache for ', appName);
+  deleteApp(app)
+});
+
 export default function FCM(args, pushType) {
   if (typeof args !== 'object' || !args.firebaseServiceAccount) {
     throw new Parse.Error(
@@ -24,20 +34,27 @@ export default function FCM(args, pushType) {
       'FCM Configuration is invalid',
     );
   }
-
-  let app;
-
-  const name = args.firebaseServiceAccount
-
-  try{
-    app = getApp(name)
-  } catch(e) {
-    if (e.code == 'app/no-app') {
-      app = initializeApp({ credential: cert(args.firebaseServiceAccount) }, name);
-    }
-    else throw e
-  }
   
+  let app;
+  const name = args.firebaseServiceAccount
+  try {
+    app = requestCacheControl.get(name);
+    if (!app) {
+      try {
+        app = getApp(name); 
+      } catch (e) {
+        if (e.code === 'app/no-app') {
+          app = initializeApp({ credential: cert(args.firebaseServiceAccount) }, name); 
+        } else {
+          throw e;
+        }
+      }
+      requestCacheControl.set(name, app);
+    }
+  } catch (e) {
+    throw e;
+  }
+
   this.sender = getMessaging(app);
   this.pushType = pushType; // Push type is only used to remain backwards compatible with APNS and GCM
 }
